@@ -341,11 +341,12 @@
       /* On mobile the list view is full screen, no sheet needed */
       #list-view { position: fixed; inset: 54px 0 0 0; z-index: 500; }
 
-      /* Mobile header: hide center badge + text buttons; show pill + trophy */
-      #stats-badge      { display: none; }
+      /* Mobile header: hide everything except the tiny tried pill + trophy btn */
+      #stats-badge       { display: none; }
       .mobile-stats-pill { display: inline; }
-      #details-btn      { display: none; }
-      #leaderboard-btn  { display: none; }
+      .view-toggle       { display: none; }
+      #details-btn       { display: none; }
+      #leaderboard-btn   { display: none; }
       .mobile-trophy-btn { display: flex; }
     }
 
