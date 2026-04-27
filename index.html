@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pizza Quest 🍕</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --red:        #e63946;
+      --red-dark:   #c1121f;
+      --green:      #2a9d8f;
+      --navy:       #1d3557;
+      --gold:       #f59e0b;
+      --text:       #1e293b;
+      --text-mid:   #475569;
+      --text-light: #94a3b8;
+      --border:     #e2e8f0;
+      --bg:         #f8fafc;
+      --sidebar-w:  370px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      color: var(--text);
+      background: #000;
+    }
+
+    /* ── HEADER ─────────────────────────────────────── */
+    header {
+      background: var(--navy);
+      color: #fff;
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      flex-shrink: 0;
+      z-index: 1100;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.35);
+      gap: 12px;
+      position: relative;
+    }
+
+    .hdr-left { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .hdr-emoji { font-size: 1.5rem; line-height: 1; }
+    .hdr-title { font-size: 1.05rem; font-weight: 800; letter-spacing: -0.02em; }
+    .hdr-sub   { font-size: 0.68rem; opacity: 0.6; margin-top: 1px; }
+
+    .radius-btn {
+      background: none;
+      border: none;
+      color: inherit;
+      font-size: inherit;
+      font-family: inherit;
+      cursor: pointer;
+      padding: 0;
+      opacity: 0.85;
+      text-decoration: underline dotted rgba(255,255,255,0.5);
+      transition: opacity 0.15s;
+    }
+    .radius-btn:hover { opacity: 1; }
+
+    #stats-badge {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 20px;
+      padding: 4px 13px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .hdr-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+    .hdr-btn {
+      padding: 6px 13px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .hdr-btn:hover, .hdr-btn.active { background: rgba(255,255,255,0.24); }
+
+    .view-toggle {
+      display: flex;
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .view-toggle .hdr-btn {
+      border-radius: 0;
+      border: none;
+      border-right: 1px solid rgba(255,255,255,0.2);
+    }
+    .view-toggle .hdr-btn:last-child { border-right: none; }
+
+    /* ── RADIUS PICKER ───────────────────────────────── */
+    #radius-picker {
+      display: none;
+      position: fixed;
+      top: 62px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #fff;
+      border-radius: 12px;
+      padding: 18px 22px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.22);
+      z-index: 9999;
+      width: 290px;
+      color: var(--text);
+    }
+    .rp-title { font-size: 0.88rem; font-weight: 700; margin-bottom: 14px; }
+    .rp-title em { color: var(--red); font-style: normal; }
+    input[type=range].rp-slider {
+      width: 100%;
+      accent-color: var(--red);
+      cursor: pointer;
+      height: 4px;
+    }
+    .rp-marks { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--text-light); margin-top: 5px; }
+    .rp-actions { display: flex; gap: 8px; margin-top: 16px; }
+    .rp-apply {
+      flex: 1; padding: 9px; background: var(--red); color: #fff;
+      border: none; border-radius: 7px; font-weight: 700; font-size: 0.84rem; cursor: pointer;
+    }
+    .rp-apply:hover { background: var(--red-dark); }
+    .rp-cancel {
+      padding: 9px 14px; background: var(--bg); color: var(--text-mid);
+      border: 1px solid var(--border); border-radius: 7px; font-weight: 600; font-size: 0.84rem; cursor: pointer;
+    }
+
+    /* ── ADDRESS PICKER ─────────────────────────────── */
+    #addr-picker {
+      display: none;
+      position: fixed;
+      top: 62px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #fff;
+      border-radius: 12px;
+      padding: 18px 22px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.22);
+      z-index: 9999;
+      width: 320px;
+      color: var(--text);
+    }
+    #addr-input {
+      width: 100%; padding: 9px 11px;
+      border: 1.5px solid var(--border); border-radius: 7px;
+      font-size: 0.85rem; font-family: inherit;
+      outline: none; margin-top: 4px;
+      transition: border-color 0.15s;
+    }
+    #addr-input:focus { border-color: var(--red); }
+    #addr-error { font-size: 0.75rem; color: var(--red); margin-top: 6px; display: none; }
+
+    /* ── MAIN ────────────────────────────────────────── */
+    main { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── MAP ─────────────────────────────────────────── */
+    #map-wrap { flex: 1; position: relative; }
+    #map { width: 100%; height: 100%; }
+
+    #map-loading {
+      position: absolute; inset: 0;
+      background: rgba(255,255,255,0.88);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 9000; gap: 14px;
+    }
+    #map-loading.hidden { display: none; }
+
+    .spinner {
+      width: 42px; height: 42px;
+      border: 4px solid var(--border);
+      border-top-color: var(--red);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { font-size: 0.9rem; font-weight: 600; color: var(--text-mid); }
+
+    /* ── LIST VIEW ───────────────────────────────────── */
+    #list-view { flex: 1; display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
+    #list-view.hidden { display: none; }
+
+    .list-controls {
+      display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+      padding: 10px 16px; background: #fff;
+      border-bottom: 2px solid var(--border); flex-shrink: 0;
+    }
+    .list-ctrl-label {
+      font-size: 0.71rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-light); margin-right: 2px;
+    }
+    .list-sort-btn {
+      padding: 5px 12px; border-radius: 20px;
+      border: 1px solid var(--border); background: #fff;
+      cursor: pointer; font-size: 0.75rem; font-weight: 700; color: var(--text-mid);
+      transition: all 0.12s;
+    }
+    .list-sort-btn:hover { border-color: var(--red); color: var(--red); }
+    .list-sort-btn.active { background: var(--red); border-color: var(--red); color: #fff; }
+
+    #list-items { flex: 1; overflow-y: auto; }
+
+    .list-item {
+      display: flex; align-items: center; gap: 13px;
+      padding: 13px 18px; background: #fff;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer; transition: background 0.1s;
+    }
+    .list-item:hover { background: var(--bg); }
+
+    .list-dot {
+      width: 28px; height: 28px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; font-weight: 900; flex-shrink: 0; color: #fff;
+    }
+    .list-dot.tried  { background: var(--green); }
+    .list-dot.untried { background: #dde3ec; color: var(--text-light); }
+
+    .list-info { flex: 1; min-width: 0; }
+    .list-name { font-size: 0.9rem; font-weight: 700; margin-bottom: 2px; }
+    .list-meta { font-size: 0.73rem; color: var(--text-light); }
+
+    .list-scores { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; }
+    .list-g  { font-size: 0.8rem; font-weight: 700; color: #92400e; }
+    .list-g.none { color: var(--text-light); font-weight: 400; font-style: italic; }
+    .list-us { font-size: 0.77rem; font-weight: 700; color: var(--navy); }
+    .list-us.none { color: var(--text-light); font-weight: 400; }
+
+    /* ── SIDEBAR ─────────────────────────────────────── */
+    #sidebar {
+      width: var(--sidebar-w); flex-shrink: 0;
+      background: #fff; border-left: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      transition: width 0.25s ease, opacity 0.2s;
+      overflow: hidden;
+    }
+    #sidebar.collapsed { width: 0; opacity: 0; }
+
+    .sb-tabs { display: flex; border-bottom: 2px solid var(--border); flex-shrink: 0; }
+    .sb-tab {
+      flex: 1; padding: 11px 6px;
+      background: none; border: none;
+      border-bottom: 2px solid transparent; margin-bottom: -2px;
+      cursor: pointer; font-size: 0.8rem; font-weight: 700; color: var(--text-light);
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .sb-tab:hover { color: var(--text); background: var(--bg); }
+    .sb-tab.active { color: var(--red); border-bottom-color: var(--red); }
+
+    .sb-view { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+    .sb-view.active { display: flex; }
+
+    /* ── PLACE VIEW ──────────────────────────────────── */
+    #place-empty {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      color: var(--text-light); gap: 10px; padding: 40px 28px; text-align: center;
+    }
+    #place-empty .icon { font-size: 2.8rem; }
+    #place-empty strong { font-size: 0.9rem; color: var(--text-mid); }
+    #place-empty span { font-size: 0.8rem; }
+
+    #place-content { display: none; flex-direction: column; flex: 1; overflow-y: auto; }
+    #place-content.visible { display: flex; }
+
+    .pl-header { padding: 18px 20px 14px; border-bottom: 1px solid var(--border); }
+    .pl-name { font-size: 1.1rem; font-weight: 800; line-height: 1.25; margin-bottom: 4px; }
+    .pl-addr { font-size: 0.78rem; color: var(--text-light); margin-bottom: 10px; }
+    .pl-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    .rating-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: #fef3c7; border: 1px solid #f59e0b;
+      border-radius: 20px; padding: 3px 11px;
+      font-size: 0.8rem; font-weight: 700; color: #92400e;
+    }
+    .rating-pill .src { font-weight: 400; opacity: 0.7; font-size: 0.72rem; }
+
+    .gmaps-link {
+      font-size: 0.76rem; color: #2563eb;
+      text-decoration: none; display: flex; align-items: center; gap: 3px;
+    }
+    .gmaps-link:hover { text-decoration: underline; }
+
+    .tried-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.72rem; font-weight: 800; padding: 3px 9px;
+      border-radius: 20px; background: #dcfce7; color: #15803d;
+    }
+
+    .pl-actions { padding: 14px 20px; border-bottom: 1px solid var(--border); }
+    .btn-try {
+      width: 100%; padding: 11px; border-radius: 8px; border: none;
+      cursor: pointer; font-size: 0.9rem; font-weight: 800;
+      transition: all 0.15s; letter-spacing: 0.01em;
+    }
+    .btn-try.untried { background: var(--red); color: #fff; }
+    .btn-try.untried:hover { background: var(--red-dark); }
+    .btn-try.tried { background: #f0fdf4; color: #15803d; border: 2px solid #86efac; }
+    .btn-try.tried:hover { background: #fef2f2; color: var(--red); border-color: #fca5a5; }
+    .tried-date { text-align: center; font-size: 0.72rem; color: var(--text-light); margin-top: 6px; }
+
+    .pl-ratings { padding: 16px 20px; }
+    .section-label {
+      font-size: 0.72rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-light); margin-bottom: 14px;
+    }
+    .ratings-locked { text-align: center; color: var(--text-light); font-size: 0.82rem; padding: 10px 0 6px; }
+    .ratings-dim { opacity: 0.35; pointer-events: none; user-select: none; }
+    .rater-row { display: flex; align-items: center; gap: 8px; margin-bottom: 13px; }
+    .rater-name { font-size: 0.82rem; font-weight: 700; width: 76px; flex-shrink: 0; }
+    .star-row { display: flex; gap: 1px; }
+    .star {
+      font-size: 1.15rem; cursor: pointer; transition: transform 0.08s;
+      color: var(--gold); opacity: 0.22; line-height: 1; user-select: none;
+    }
+    .star.on { opacity: 1; }
+    .star:hover { transform: scale(1.25); }
+    .rater-num { font-size: 0.82rem; font-weight: 800; color: var(--text-light); width: 22px; text-align: right; }
+    .rater-num.set { color: var(--text); }
+
+    .avg-box {
+      margin-top: 12px; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px; text-align: center;
+    }
+    .avg-label { font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-light); }
+    .avg-num { font-size: 2rem; font-weight: 900; color: var(--navy); line-height: 1.1; }
+
+    /* ── LEADERBOARD VIEW ────────────────────────────── */
+    .lb-filter-strip {
+      display: flex; gap: 6px; flex-wrap: wrap;
+      padding: 12px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .lb-ftab {
+      padding: 5px 13px; border-radius: 20px;
+      border: 1px solid var(--border); background: #fff;
+      cursor: pointer; font-size: 0.76rem; font-weight: 700; color: var(--text-mid);
+      transition: all 0.12s;
+    }
+    .lb-ftab:hover { border-color: var(--red); color: var(--red); }
+    .lb-ftab.active { background: var(--red); border-color: var(--red); color: #fff; }
+
+    .lb-list { flex: 1; overflow-y: auto; }
+    .lb-empty {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 60px 24px; color: var(--text-light); text-align: center; gap: 10px;
+    }
+    .lb-empty .icon { font-size: 2.5rem; }
+    .lb-empty strong { font-size: 0.88rem; color: var(--text-mid); }
+
+    .lb-item {
+      display: flex; align-items: center; padding: 11px 16px; gap: 12px;
+      border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s;
+    }
+    .lb-item:hover { background: var(--bg); }
+    .lb-rank { font-size: 1.2rem; width: 30px; text-align: center; flex-shrink: 0; }
+    .lb-info { flex: 1; min-width: 0; }
+    .lb-name { font-size: 0.86rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .lb-sub { font-size: 0.72rem; color: var(--text-light); margin-top: 2px; }
+    .lb-score { text-align: right; flex-shrink: 0; }
+    .lb-score-big { font-size: 1.35rem; font-weight: 900; color: var(--navy); line-height: 1; }
+    .lb-score-lbl { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); }
+
+    /* ── MARKERS ─────────────────────────────────────── */
+    .pm {
+      width: 38px; height: 38px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem; border: 3px solid #fff;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.35);
+      cursor: pointer; transition: transform 0.1s;
+    }
+    .pm:hover { transform: scale(1.12); }
+    .pm.untried { background: var(--red); }
+    .pm.tried   { background: var(--green); color: #fff; font-size: 1.3rem; }
+    .pm.ring    { outline: 3px solid var(--navy); outline-offset: 2px; }
+
+    .leaflet-tooltip {
+      background: var(--navy); color: #fff; border: none;
+      border-radius: 6px; font-size: 0.78rem; font-weight: 700;
+      padding: 5px 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.25); white-space: nowrap;
+    }
+    .leaflet-tooltip::before { border-top-color: var(--navy) !important; }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: #cbd5e0; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="hdr-left">
+    <span class="hdr-emoji">🍕</span>
+    <div>
+      <div class="hdr-title">Pizza Quest</div>
+      <div class="hdr-sub">
+        <button class="radius-btn" id="addr-btn" onclick="openAddrPicker()" title="Change home address">
+          <span id="addr-label">176 E. 77th Street</span> ✎
+        </button>
+        &nbsp;·&nbsp;
+        <button class="radius-btn" onclick="openRadiusPicker()" title="Change walk radius">
+          <span id="radius-label">15</span>-min walk radius ✎
+        </button>
+      </div>
+    </div>
+  </div>
+  <div id="stats-badge">Loading…</div>
+  <div class="hdr-right">
+    <div class="view-toggle">
+      <button class="hdr-btn active" id="btn-map-view"  onclick="setAppView('map')">🗺 Map</button>
+      <button class="hdr-btn"        id="btn-list-view" onclick="setAppView('list')">📋 List</button>
+    </div>
+    <button class="hdr-btn" id="lb-toggle-btn" onclick="toggleSidebar('leaderboard')">🏆 Leaderboard</button>
+  </div>
+</header>
+
+<!-- Address picker popover -->
+<div id="addr-picker">
+  <div class="rp-title">📍 Change home address</div>
+  <input type="text" id="addr-input" placeholder="e.g. 176 E. 77th Street, New York"
+         onkeydown="if(event.key==='Enter')applyAddr()" />
+  <div id="addr-error">Address not found — try adding ", New York, NY"</div>
+  <div class="rp-actions">
+    <button class="rp-apply" onclick="applyAddr()">Move Home &amp; Reload</button>
+    <button class="rp-cancel" onclick="closeAddrPicker()">Cancel</button>
+  </div>
+</div>
+
+<!-- Radius picker popover -->
+<div id="radius-picker">
+  <div class="rp-title">Walk radius: <em id="rp-display">15</em> minutes</div>
+  <input type="range" class="rp-slider" id="rp-slider" min="5" max="60" step="5" value="15"
+         oninput="updateRadiusDisplay(this.value)" />
+  <div class="rp-marks"><span>5 min</span><span>30 min</span><span>60 min</span></div>
+  <div class="rp-actions">
+    <button class="rp-apply" onclick="applyRadius()">Apply &amp; Reload</button>
+    <button class="rp-cancel" onclick="closeRadiusPicker()">Cancel</button>
+  </div>
+</div>
+
+<main>
+  <div id="map-wrap">
+    <div id="map"></div>
+    <div id="fallback-banner" style="display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:8000;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:7px 16px;font-size:0.76rem;font-weight:600;color:#92400e;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
+      ⚠️ Live data unavailable — showing known UES slice shops. Open in your browser for full results.
+    </div>
+    <div id="map-loading">
+      <div class="spinner"></div>
+      <div class="loading-text">Finding pizza near you…</div>
+    </div>
+  </div>
+
+  <!-- List view (shown instead of map) -->
+  <div id="list-view" class="hidden">
+    <div class="list-controls">
+      <span class="list-ctrl-label">Sort by:</span>
+      <button class="list-sort-btn active" data-sort="distance" onclick="setListSort(this,'distance')">📍 Distance</button>
+      <button class="list-sort-btn"        data-sort="tried"    onclick="setListSort(this,'tried')">✓ Tried</button>
+      <button class="list-sort-btn"        data-sort="rating"   onclick="setListSort(this,'rating')">★ Our Rating</button>
+      <button class="list-sort-btn"        data-sort="google"   onclick="setListSort(this,'google')">⭐ Google</button>
+    </div>
+    <div id="list-items"></div>
+  </div>
+
+  <div id="sidebar" class="collapsed">
+    <div class="sb-tabs">
+      <button class="sb-tab active" id="tab-place"       onclick="setTab('place')">📍 Place Details</button>
+      <button class="sb-tab"        id="tab-leaderboard" onclick="setTab('leaderboard')">🏆 Rankings</button>
+    </div>
+
+    <div class="sb-view active" id="view-place">
+      <div id="place-empty">
+        <div class="icon">🗺️</div>
+        <strong>Click a pizza spot</strong>
+        <span>on the map or list to see details,<br>mark it as tried, and rate it.</span>
+      </div>
+      <div id="place-content"></div>
+    </div>
+
+    <div class="sb-view" id="view-leaderboard">
+      <div class="lb-filter-strip">
+        <button class="lb-ftab active" data-f="avg"      onclick="setLbFilter(this,'avg')">Overall</button>
+        <button class="lb-ftab"        data-f="Anderson" onclick="setLbFilter(this,'Anderson')">Anderson</button>
+        <button class="lb-ftab"        data-f="Mommy"    onclick="setLbFilter(this,'Mommy')">Mommy</button>
+        <button class="lb-ftab"        data-f="Daddy"    onclick="setLbFilter(this,'Daddy')">Daddy</button>
+      </div>
+      <div class="lb-list" id="lb-list"></div>
+    </div>
+  </div>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ─── Constants & mutable config ───────────────────────────────────────────────
+let   CENTER    = [40.7730, -73.9585]; // 176 E. 77th Street
+let   WALK_M    = 1200;                // meters (~15-min walk)
+let   walkMins  = 15;
+
+const REVIEWERS = ['Anderson', 'Mommy', 'Daddy'];
+const STATE_KEY = 'ues-pizza-quest-v2';
+const MEDALS    = ['🥇','🥈','🥉'];
+
+// Google Maps ratings (sourced early 2025) — matched by lowercase substring
+const KNOWN_RATINGS = {
+  "patsy's":             4.4,
+  "nick's pizza":        4.3,
+  "pintaile's":          4.2,
+  "sofia pizza":         4.2,
+  "lucia pizza":         4.3,
+  "2 bros":              3.9,
+  "joe's pizza":         4.6,
+  "two boots":           4.0,
+  "koronet":             4.1,
+  "kornet":              4.2,
+  "east side pizza":     4.1,
+  "paul's pizza":        4.1,
+  "frank's pizza":       4.2,
+  "sal's pizza":         4.1,
+  "rigoletto":           4.1,
+  "pizza pete":          4.0,
+  "rosario's":           4.2,
+  "caesar's pizza":      4.0,
+  "v & t":               4.3,
+  "pizza suprema":       4.5,
+  "ny pizza suprema":    4.5,
+  "sal & carmine":       4.7,
+  "totonno":             4.4,
+  "grimaldi's":          4.3,
+  "john's pizzeria":     4.5,
+  "john's of bleecker":  4.5,
+  "di fara":             4.6,
+  "scarr's":             4.3,
+  "prince street pizza": 4.5,
+  "arturo's":            4.3,
+  "razza":               4.7,
+  "pizza by certé":      4.1,
+  "pizza shoppe":        4.1,
+  "ray's pizza":         3.8,
+  "famous ray":          3.8,
+  "original ray":        3.8,
+  // UES-specific
+  "saba's pizza":        4.3,
+  "gotham pizza":        4.0,
+  "marinara pizza":      4.1,
+  "mariella pizza":      4.1,
+  "mimi's pizza":        4.0,
+  "roma pizza":          3.9,
+  "original roma":       3.9,
+  "la mia pizza":        4.1,
+  "little italy pizza":  3.9,
+  "pizza park":          3.8,
+  "centro pizza":        4.0,
+  "giacomo's pizza":     4.1,
+  "lunetta pizza":       4.2,
+  "york ave pizza":      4.0,
+  "williamsburg pizza":  4.2,
+  "famous famiglia":     3.6,
+  "italian village":     3.8,
+  "domino's":            3.4,
+  "serafina":            4.0,
+};
+
+const CHAIN_PATTERNS   = ['domino','pizza hut','papa john','little caesar','papa murphy'];
+const SIT_DOWN_PATTERNS = ['ristorante','trattoria','osteria','enoteca','cucina','taverna'];
+const BLOCKLIST = ['tiramisu','modern bread','bagel'];
+
+// Always-shown places regardless of API results (deduplicated by name)
+const PINNED_PLACES = [
+  { id:'pin-1', name:"Kornet Pizza", lat:40.7740, lon:-73.9597, address:'1110 Lexington Ave (btw 77th & 78th St)', knownG:4.2, chain:false },
+];
+
+// Fallback: confirmed traditional NYC slice shops near 77th & 3rd
+// Coords approximate; ratings from Google Maps early 2025
+const FALLBACK_PLACES = [
+  { id:'fb-1',  name:"Kornet Pizza",       lat:40.7740, lon:-73.9597, address:'1110 Lexington Ave (btw 77th & 78th St)', knownG:4.2, chain:false },
+  { id:'fb-2',  name:"Patsy's Pizzeria",   lat:40.7699, lon:-73.9546, address:'1312 2nd Ave (at E. 69th St)',        knownG:4.4, chain:false },
+  { id:'fb-3',  name:"Nick's Pizza",       lat:40.7847, lon:-73.9529, address:'1814 2nd Ave (at E. 94th St)',        knownG:4.3, chain:false },
+  { id:'fb-4',  name:"Pintaile's Pizza",   lat:40.7813, lon:-73.9539, address:'E. 84th St & 2nd Ave',               knownG:4.2, chain:false },
+  { id:'fb-5',  name:"Sofia Pizza Shoppe", lat:40.7720, lon:-73.9580, address:'Upper East Side',                    knownG:4.2, chain:false },
+  { id:'fb-6',  name:"2 Bros. Pizza",      lat:40.7757, lon:-73.9539, address:'1502 2nd Ave (at E. 78th St)',        knownG:3.9, chain:false },
+  { id:'fb-7',  name:"Lucia Pizza",        lat:40.7748, lon:-73.9555, address:'Upper East Side',                    knownG:4.3, chain:false },
+  { id:'fb-8',  name:"Two Boots Pizza",    lat:40.7732, lon:-73.9560, address:'Upper East Side',                    knownG:4.0, chain:false },
+  { id:'fb-9',  name:"East Side Pizza",    lat:40.7768, lon:-73.9548, address:'Upper East Side',                    knownG:4.1, chain:false },
+];
+
+// ─── App State ────────────────────────────────────────────────────────────────
+let state = { visited: {}, ratings: {} };
+let places    = [];
+let markers   = {};
+let selectedId  = null;
+let sidebarOpen = false;
+let currentTab  = 'place';
+let lbFilter    = 'avg';
+let appView     = 'map';
+let listSort    = 'distance';
+
+function loadState() {
+  try {
+    const s = localStorage.getItem(STATE_KEY);
+    if (s) {
+      const parsed = JSON.parse(s);
+      state = { visited: parsed.visited || {}, ratings: parsed.ratings || {} };
+    }
+  } catch(_) {}
+}
+function saveState() {
+  try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch(_) {}
+}
+
+// ─── Map Setup ────────────────────────────────────────────────────────────────
+loadState();
+
+const map = L.map('map', { center: CENTER, zoom: 15 });
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  subdomains: 'abcd',
+  maxZoom: 20,
+}).addTo(map);
+
+const walkCircle = L.circle(CENTER, {
+  radius: WALK_M, color: '#e63946', fillColor: '#e63946',
+  fillOpacity: 0.05, weight: 2, dashArray: '7 5',
+}).addTo(map);
+
+let homeAddrLabel = '176 E. 77th Street';
+const homeMarker = L.marker(CENTER, {
+  icon: L.divIcon({
+    className: '',
+    html: '<div style="width:14px;height:14px;background:#1d3557;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.45)"></div>',
+    iconSize: [14,14], iconAnchor: [7,7],
+  })
+}).addTo(map).bindTooltip('📍 ' + homeAddrLabel, { direction: 'top' });
+
+const markerGroup = L.layerGroup().addTo(map);
+
+// Close pickers when clicking elsewhere
+document.addEventListener('click', e => {
+  const rp = document.getElementById('radius-picker');
+  if (rp.style.display === 'block' && !rp.contains(e.target) && !e.target.closest('.radius-btn')) {
+    rp.style.display = 'none';
+  }
+  const ap = document.getElementById('addr-picker');
+  if (ap.style.display === 'block' && !ap.contains(e.target) && !e.target.closest('#addr-btn')) {
+    ap.style.display = 'none';
+  }
+});
+
+// ─── Radius Picker ────────────────────────────────────────────────────────────
+function openRadiusPicker() {
+  const picker = document.getElementById('radius-picker');
+  document.getElementById('rp-slider').value = walkMins;
+  document.getElementById('rp-display').textContent = walkMins;
+  picker.style.display = picker.style.display === 'block' ? 'none' : 'block';
+}
+function closeRadiusPicker() {
+  document.getElementById('radius-picker').style.display = 'none';
+}
+function updateRadiusDisplay(val) {
+  document.getElementById('rp-display').textContent = val;
+}
+async function applyRadius() {
+  walkMins = parseInt(document.getElementById('rp-slider').value);
+  WALK_M   = walkMins * 80;
+  document.getElementById('radius-label').textContent = walkMins;
+  closeRadiusPicker();
+  walkCircle.setRadius(WALK_M);
+  map.fitBounds(walkCircle.getBounds());
+  await reloadPlaces();
+}
+
+// ─── Address Picker ───────────────────────────────────────────────────────────
+function openAddrPicker() {
+  const picker = document.getElementById('addr-picker');
+  document.getElementById('addr-input').value = homeAddrLabel;
+  document.getElementById('addr-error').style.display = 'none';
+  picker.style.display = picker.style.display === 'block' ? 'none' : 'block';
+  setTimeout(() => document.getElementById('addr-input').select(), 50);
+}
+function closeAddrPicker() {
+  document.getElementById('addr-picker').style.display = 'none';
+}
+async function applyAddr() {
+  const raw = document.getElementById('addr-input').value.trim();
+  if (!raw) return;
+  const errEl = document.getElementById('addr-error');
+  errEl.style.display = 'none';
+  const btn = document.querySelector('#addr-picker .rp-apply');
+  btn.textContent = 'Looking up…';
+  btn.disabled = true;
+  try {
+    const query = encodeURIComponent(raw + (raw.toLowerCase().includes('new york') ? '' : ', New York, NY'));
+    const res  = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`);
+    const data = await res.json();
+    if (!data.length) throw new Error('not found');
+    const lat = parseFloat(data[0].lat);
+    const lon = parseFloat(data[0].lon);
+    // Use the user-typed label (trimmed), strip trailing city/state fluff for display
+    homeAddrLabel = raw.replace(/,?\s*(new york|ny|nyc|manhattan).*/i, '').trim();
+    CENTER[0] = lat;
+    CENTER[1] = lon;
+    document.getElementById('addr-label').textContent = homeAddrLabel;
+    homeMarker.setLatLng([lat, lon]);
+    homeMarker.setTooltipContent('📍 ' + homeAddrLabel);
+    walkCircle.setLatLng([lat, lon]);
+    map.setView([lat, lon], map.getZoom());
+    closeAddrPicker();
+    await reloadPlaces();
+  } catch(_) {
+    errEl.style.display = 'block';
+  } finally {
+    btn.textContent = 'Move Home & Reload';
+    btn.disabled = false;
+  }
+}
+
+// ─── Data ─────────────────────────────────────────────────────────────────────
+function isChain(name) {
+  const n = (name || '').toLowerCase();
+  return CHAIN_PATTERNS.some(c => n.includes(c));
+}
+function knownRating(name) {
+  const n = (name || '').toLowerCase();
+  for (const [k,v] of Object.entries(KNOWN_RATINGS)) {
+    if (n.includes(k)) return v;
+  }
+  return null;
+}
+function buildAddress(tags) {
+  if (!tags) return null;
+  const num = tags['addr:housenumber'] || '';
+  const st  = tags['addr:street']     || '';
+  return (num && st) ? `${num} ${st}` : null;
+}
+function isLikelySliceShop(name, tags) {
+  const n = (name || '').toLowerCase();
+  if (BLOCKLIST.some(b => n.includes(b))) return false;
+  const hasPizzaWord = n.includes('pizza') || n.includes('pizzeria') || n.includes('slice');
+  if (SIT_DOWN_PATTERNS.some(p => n.includes(p))) return false;
+  if (!hasPizzaWord && tags?.amenity === 'restaurant') return false;
+  return true;
+}
+function parsePlacesFromOSM(data) {
+  const seen = new Set();
+  const out  = [];
+  for (const el of data.elements) {
+    const name = el.tags?.name;
+    if (!name || !isLikelySliceShop(name, el.tags)) continue;
+    const lat = el.lat ?? el.center?.lat;
+    const lon = el.lon ?? el.center?.lon;
+    if (!lat || !lon) continue;
+    const key = `${name.toLowerCase()}|${lat.toFixed(3)}|${lon.toFixed(3)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ id:`osm-${el.id}`, name, lat, lon, address:buildAddress(el.tags), chain:isChain(name), knownG:knownRating(name) });
+  }
+  out.sort((a,b) => a.chain !== b.chain ? (a.chain ? 1 : -1) : a.name.localeCompare(b.name));
+  return out;
+}
+
+function mergePinned(results) {
+  const names = new Set(results.map(p => p.name.toLowerCase()));
+  for (const p of PINNED_PLACES) {
+    if (!names.has(p.name.toLowerCase())) results.push(p);
+  }
+  return results;
+}
+
+async function fetchPlaces() {
+  const q = `
+[out:json][timeout:30];
+(
+  node["cuisine"~"pizza",i](around:${WALK_M},${CENTER[0]},${CENTER[1]});
+  way["cuisine"~"pizza",i](around:${WALK_M},${CENTER[0]},${CENTER[1]});
+  node["shop"="pizza"](around:${WALK_M},${CENTER[0]},${CENTER[1]});
+  way["shop"="pizza"](around:${WALK_M},${CENTER[0]},${CENTER[1]});
+  node["amenity"~"restaurant|fast_food"]["name"~"pizza|pizzeria|slice",i](around:${WALK_M},${CENTER[0]},${CENTER[1]});
+  way["amenity"~"restaurant|fast_food"]["name"~"pizza|pizzeria|slice",i](around:${WALK_M},${CENTER[0]},${CENTER[1]});
+);
+out center;
+  `.trim();
+
+  const endpoints = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass.openstreetmap.ru/api/interpreter',
+  ];
+
+  for (const url of endpoints) {
+    try {
+      const ctrl  = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 12000);
+      const res   = await fetch(url, {
+        method: 'POST',
+        body: 'data=' + encodeURIComponent(q),
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+      if (!res.ok) continue;
+      const data    = await res.json();
+      const results = parsePlacesFromOSM(data);
+      if (results.length > 0) return mergePinned(results);
+    } catch(_) {}
+  }
+
+  document.getElementById('fallback-banner').style.display = 'block';
+  return FALLBACK_PLACES;
+}
+
+async function reloadPlaces() {
+  document.getElementById('map-loading').classList.remove('hidden');
+  try {
+    places = await fetchPlaces();
+    renderMarkers();
+    updateStats();
+    if (appView === 'list') renderList();
+  } catch(_) {}
+  document.getElementById('map-loading').classList.add('hidden');
+}
+
+// ─── Markers ──────────────────────────────────────────────────────────────────
+function makeIcon(id) {
+  const tried    = !!state.visited[id];
+  const selected = id === selectedId;
+  return L.divIcon({
+    className: '',
+    html: `<div class="pm ${tried?'tried':'untried'} ${selected?'ring':''}">${tried ? '✓' : '🍕'}</div>`,
+    iconSize: [38,38], iconAnchor: [19,19],
+  });
+}
+function renderMarkers() {
+  markerGroup.clearLayers();
+  markers = {};
+  for (const p of places) {
+    const m = L.marker([p.lat, p.lon], { icon: makeIcon(p.id) });
+    m.bindTooltip(p.name, { direction: 'top', offset: [0,-22] });
+    m.on('click', () => selectPlace(p.id));
+    m.addTo(markerGroup);
+    markers[p.id] = m;
+  }
+}
+function refreshIcon(id) { markers[id]?.setIcon(makeIcon(id)); }
+
+// ─── Selection ────────────────────────────────────────────────────────────────
+function selectPlace(id) {
+  const prev = selectedId;
+  selectedId = id;
+  if (prev && prev !== id) refreshIcon(prev);
+  refreshIcon(id);
+  openSidebar();
+  setTab('place');
+  renderPlacePanel();
+}
+
+// ─── Place Panel ──────────────────────────────────────────────────────────────
+function h(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function avgRating(id) {
+  const r    = state.ratings[id] || {};
+  const vals = REVIEWERS.map(n => r[n]).filter(v => v != null);
+  return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+}
+
+function renderPlacePanel() {
+  const emptyEl   = document.getElementById('place-empty');
+  const contentEl = document.getElementById('place-content');
+  const p = places.find(x => x.id === selectedId);
+
+  if (!p) {
+    emptyEl.style.display = '';
+    contentEl.className   = 'sb-view';
+    contentEl.innerHTML   = '';
+    return;
+  }
+
+  emptyEl.style.display = 'none';
+  contentEl.className   = 'sb-view visible';
+
+  const visited = state.visited[p.id];
+  const ratings = state.ratings[p.id] || {};
+  const gRating = p.knownG;
+  const avg     = avgRating(p.id);
+  const searchQ = encodeURIComponent(`${p.name} pizza New York`);
+  const gmUrl   = `https://www.google.com/maps/search/?api=1&query=${searchQ}`;
+
+  contentEl.innerHTML = `
+    <div class="pl-header">
+      <div class="pl-name">${h(p.name)}</div>
+      <div class="pl-addr">📍 ${h(p.address || 'Upper East Side, New York')}</div>
+      <div class="pl-meta">
+        ${gRating
+          ? `<span class="rating-pill">⭐ ${gRating} / 5 <span class="src">· Google</span></span>`
+          : `<a href="${gmUrl}" target="_blank" class="gmaps-link">🗺 Look up on Google Maps</a>`
+        }
+        ${gRating ? `<a href="${gmUrl}" target="_blank" class="gmaps-link">🗺 Google Maps</a>` : ''}
+        ${visited ? '<span class="tried-badge">✓ Tried!</span>' : ''}
+      </div>
+    </div>
+
+    <div class="pl-actions">
+      <button class="btn-try ${visited ? 'tried' : 'untried'}" onclick="toggleVisited('${p.id}')">
+        ${visited ? '✓ We tried this! (undo)' : '🍕 Mark as Tried!'}
+      </button>
+      ${visited ? `<div class="tried-date">Tried ${h(visited.date)}</div>` : ''}
+    </div>
+
+    <div class="pl-ratings">
+      <div class="section-label">Our Ratings (1–10 ★)</div>
+      <div class="${visited ? '' : 'ratings-dim'}">
+        ${REVIEWERS.map(name => {
+          const cur   = visited ? (ratings[name] || 0) : 0;
+          const stars = Array.from({length:10}, (_,i) => `
+            <span class="star ${i < cur ? 'on' : ''}"
+              onclick="setRating('${p.id}','${name}',${i+1})"
+              onmouseover="previewStars('${p.id}','${name}',${i+1})"
+              onmouseout="resetStars('${p.id}','${name}')">★</span>
+          `).join('');
+          return `
+            <div class="rater-row">
+              <div class="rater-name">${h(name)}</div>
+              <div class="star-row" id="sr-${p.id}-${name}">${stars}</div>
+              <div class="rater-num ${cur?'set':''}" id="sn-${p.id}-${name}">${cur || '–'}</div>
+            </div>`;
+        }).join('')}
+        ${avg !== null ? `
+          <div class="avg-box">
+            <div class="avg-label">Group Average</div>
+            <div class="avg-num">${avg.toFixed(1)}</div>
+          </div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+// ─── Rating Actions ───────────────────────────────────────────────────────────
+function toggleVisited(id) {
+  if (state.visited[id]) {
+    delete state.visited[id];
+  } else {
+    state.visited[id] = {
+      date: new Date().toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })
+    };
+  }
+  saveState();
+  refreshIcon(id);
+  renderPlacePanel();
+  updateStats();
+  if (currentTab === 'leaderboard') renderLeaderboard();
+  if (appView === 'list') renderList();
+}
+
+function setRating(id, reviewer, score) {
+  if (!state.ratings[id]) state.ratings[id] = {};
+  state.ratings[id][reviewer] = score;
+  saveState();
+  renderPlacePanel();
+  if (currentTab === 'leaderboard') renderLeaderboard();
+  if (appView === 'list') renderList();
+}
+
+function previewStars(id, reviewer, score) {
+  const row = document.getElementById(`sr-${id}-${reviewer}`);
+  const num = document.getElementById(`sn-${id}-${reviewer}`);
+  if (!row) return;
+  row.querySelectorAll('.star').forEach((s,i) => s.classList.toggle('on', i < score));
+  if (num) { num.textContent = score; num.classList.add('set'); }
+}
+
+function resetStars(id, reviewer) {
+  const cur = (state.ratings[id] || {})[reviewer] || 0;
+  const row = document.getElementById(`sr-${id}-${reviewer}`);
+  const num = document.getElementById(`sn-${id}-${reviewer}`);
+  if (!row) return;
+  row.querySelectorAll('.star').forEach((s,i) => s.classList.toggle('on', i < cur));
+  if (num) { num.textContent = cur || '–'; num.classList.toggle('set', !!cur); }
+}
+
+// ─── List View ────────────────────────────────────────────────────────────────
+function distanceTo(p) {
+  const dlat = (p.lat - CENTER[0]) * 111000;
+  const dlon = (p.lon - CENTER[1]) * Math.cos(CENTER[0] * Math.PI/180) * 111000;
+  return Math.round(Math.sqrt(dlat*dlat + dlon*dlon));
+}
+
+function setAppView(view) {
+  appView = view;
+  const isMap = view === 'map';
+  document.getElementById('map-wrap').style.display  = isMap ? '' : 'none';
+  document.getElementById('list-view').classList.toggle('hidden', isMap);
+  document.getElementById('btn-map-view').classList.toggle('active', isMap);
+  document.getElementById('btn-list-view').classList.toggle('active', !isMap);
+  if (isMap) setTimeout(() => map.invalidateSize(), 50);
+  else renderList();
+}
+
+function setListSort(btn, sort) {
+  listSort = sort;
+  document.querySelectorAll('.list-sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort === sort));
+  renderList();
+}
+
+function renderList() {
+  const el = document.getElementById('list-items');
+  if (!el) return;
+
+  const sorted = [...places].sort((a, b) => {
+    const da = distanceTo(a), db = distanceTo(b);
+    if (listSort === 'distance') return da - db;
+    if (listSort === 'tried') {
+      const at = !!state.visited[a.id], bt = !!state.visited[b.id];
+      if (at !== bt) return at ? -1 : 1;
+      return da - db;
+    }
+    if (listSort === 'rating') {
+      const ar = avgRating(a.id) ?? -1, br = avgRating(b.id) ?? -1;
+      if (ar !== br) return br - ar;
+      return da - db;
+    }
+    if (listSort === 'google') {
+      const ag = a.knownG ?? -1, bg = b.knownG ?? -1;
+      if (ag !== bg) return bg - ag;
+      return da - db;
+    }
+    return 0;
+  });
+
+  el.innerHTML = sorted.map(p => {
+    const tried   = !!state.visited[p.id];
+    const avg     = avgRating(p.id);
+    const dist    = distanceTo(p);
+    const mins    = Math.round(dist / 80);
+    const gRating = p.knownG;
+
+    return `
+      <div class="list-item" onclick="listItemClick('${p.id}')">
+        <div class="list-dot ${tried ? 'tried' : 'untried'}">${tried ? '✓' : ''}</div>
+        <div class="list-info">
+          <div class="list-name">${h(p.name)}</div>
+          <div class="list-meta">${h(p.address || 'Upper East Side')} · ~${mins} min walk</div>
+        </div>
+        <div class="list-scores">
+          ${gRating
+            ? `<div class="list-g">⭐ ${gRating} <span style="font-weight:400;opacity:0.65;font-size:0.68rem">Google</span></div>`
+            : `<div class="list-g none">no rating</div>`}
+          ${avg !== null
+            ? `<div class="list-us">★ ${avg.toFixed(1)} ours</div>`
+            : `<div class="list-us none">unrated</div>`}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function listItemClick(id) {
+  selectedId = id;
+  refreshIcon(id);
+  openSidebar();
+  setTab('place');
+  renderPlacePanel();
+}
+
+// ─── Leaderboard ──────────────────────────────────────────────────────────────
+function setLbFilter(btn, filter) {
+  lbFilter = filter;
+  document.querySelectorAll('.lb-ftab').forEach(b => b.classList.toggle('active', b.dataset.f === filter));
+  renderLeaderboard();
+}
+
+function getScore(id) {
+  const r = state.ratings[id] || {};
+  if (lbFilter === 'avg') {
+    const vals = REVIEWERS.map(n => r[n]).filter(v => v != null);
+    return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+  }
+  return r[lbFilter] ?? null;
+}
+
+function renderLeaderboard() {
+  const listEl = document.getElementById('lb-list');
+  const ranked = places
+    .filter(p => state.visited[p.id])
+    .map(p => ({ ...p, score: getScore(p.id) }))
+    .filter(p => p.score !== null)
+    .sort((a,b) => b.score - a.score);
+
+  if (!ranked.length) {
+    listEl.innerHTML = `
+      <div class="lb-empty">
+        <div class="icon">🍕</div>
+        <strong>No ratings yet!</strong>
+        <span>Mark places as tried and rate them<br>to see the rankings here.</span>
+      </div>`;
+    return;
+  }
+
+  listEl.innerHTML = ranked.map((p, i) => {
+    const r   = state.ratings[p.id] || {};
+    const sub = REVIEWERS.filter(n => r[n] != null).map(n => `${n.charAt(0)}: ${r[n]}`).join(' · ');
+    return `
+      <div class="lb-item" onclick="selectPlace('${p.id}')">
+        <div class="lb-rank">${i < 3 ? MEDALS[i] : '#'+(i+1)}</div>
+        <div class="lb-info">
+          <div class="lb-name">${h(p.name)}</div>
+          <div class="lb-sub">${h(sub || 'No individual ratings')}</div>
+        </div>
+        <div class="lb-score">
+          <div class="lb-score-big">${p.score.toFixed(1)}</div>
+          <div class="lb-score-lbl">${lbFilter === 'avg' ? 'avg' : lbFilter}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ─── Sidebar & Tabs ───────────────────────────────────────────────────────────
+function openSidebar() {
+  sidebarOpen = true;
+  document.getElementById('sidebar').classList.remove('collapsed');
+  document.getElementById('lb-toggle-btn').classList.add('active');
+  setTimeout(() => map.invalidateSize(), 260);
+}
+function closeSidebar() {
+  sidebarOpen = false;
+  document.getElementById('sidebar').classList.add('collapsed');
+  document.getElementById('lb-toggle-btn').classList.remove('active');
+  setTimeout(() => map.invalidateSize(), 260);
+}
+function toggleSidebar(tab) {
+  if (!sidebarOpen)        { openSidebar(); setTab(tab); if (tab==='leaderboard') renderLeaderboard(); }
+  else if (currentTab===tab) closeSidebar();
+  else                     { setTab(tab);  if (tab==='leaderboard') renderLeaderboard(); }
+}
+function setTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.sb-tab').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.sb-view').forEach(el => el.classList.remove('active'));
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  document.getElementById(`view-${tab}`).classList.add('active');
+  if (tab === 'place')       renderPlacePanel();
+  if (tab === 'leaderboard') renderLeaderboard();
+}
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
+function updateStats() {
+  const total = places.length;
+  const tried = places.filter(p => state.visited[p.id]).length;
+  document.getElementById('stats-badge').textContent = `${tried} / ${total} tried`;
+}
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+(async function init() {
+  try {
+    places = await fetchPlaces();
+    renderMarkers();
+    updateStats();
+    document.getElementById('map-loading').classList.add('hidden');
+  } catch(err) {
+    console.error(err);
+    document.getElementById('map-loading').innerHTML = `
+      <div style="font-size:2.5rem">⚠️</div>
+      <div class="loading-text" style="color:#c00">Could not load pizza places</div>
+      <div style="font-size:0.8rem;color:#888;max-width:280px;text-align:center">${h(err.message)}</div>
+      <button onclick="location.reload()"
+        style="margin-top:14px;padding:9px 20px;background:var(--red);color:#fff;border:none;border-radius:7px;font-weight:700;cursor:pointer;font-size:0.88rem">
+        Try Again
+      </button>`;
+  }
+})();
+</script>
+</body>
+</html>
