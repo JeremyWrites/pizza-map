@@ -269,50 +269,50 @@
       }
       #sheet-backdrop.visible { display: block; }
 
-      /* The sheet itself */
+      /* The sheet itself — three states: hidden / peek / open */
       #bottom-sheet {
         position: fixed;
         bottom: 0; left: 0; right: 0;
-        height: 65vh;
+        height: 72vh;
         background: #fff;
         border-radius: 18px 18px 0 0;
         box-shadow: 0 -4px 30px rgba(0,0,0,0.18);
         z-index: 1300;
         display: flex; flex-direction: column;
         transform: translateY(100%);
-        transition: transform 0.32s cubic-bezier(0.32,0.72,0,1);
+        transition: transform 0.34s cubic-bezier(0.32,0.72,0,1);
         overflow: hidden;
+        will-change: transform;
       }
+      /* Peek: slides up just enough to show handle + pl-header (~155px) */
+      #bottom-sheet.peek { transform: translateY(calc(100% - 155px)); }
+      /* Open: fully visible */
       #bottom-sheet.open { transform: translateY(0); }
 
-      /* Drag handle */
+      /* Drag handle — taller touch target */
       .sheet-handle {
         width: 40px; height: 4px;
         background: var(--border);
         border-radius: 2px;
-        margin: 10px auto 4px;
+        margin: 10px auto 6px;
         flex-shrink: 0;
         cursor: grab;
       }
-
-      /* Sheet tabs mirror desktop */
-      #sheet-tabs {
-        display: flex;
-        border-bottom: 2px solid var(--border);
+      /* Invisible padding area around handle for easier touch */
+      .sheet-handle-wrap {
+        padding: 6px 0 2px;
         flex-shrink: 0;
+        cursor: grab;
+        display: flex; justify-content: center;
       }
-      .sheet-tab {
-        flex: 1; padding: 10px 6px;
-        background: none; border: none;
-        border-bottom: 2px solid transparent; margin-bottom: -2px;
-        cursor: pointer; font-size: 0.8rem; font-weight: 700; color: var(--text-light);
-        display: flex; align-items: center; justify-content: center; gap: 5px;
-        transition: color 0.15s, border-color 0.15s;
-      }
-      .sheet-tab.active { color: var(--red); border-bottom-color: var(--red); }
 
-      /* Sheet content area */
-      #sheet-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+      /* Sheet content — only scrollable when open */
+      #sheet-body {
+        flex: 1;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+      }
+      #bottom-sheet.open #sheet-body { overflow-y: auto; }
 
       /* On mobile the list view is full screen, no sheet needed */
       #list-view { position: fixed; inset: 54px 0 0 0; z-index: 500; }
@@ -589,7 +589,9 @@
 <!-- Mobile bottom sheet -->
 <div id="sheet-backdrop" onclick="closeSidebar()"></div>
 <div id="bottom-sheet">
-  <div class="sheet-handle"></div>
+  <div class="sheet-handle-wrap" id="sheet-drag-handle">
+    <div class="sheet-handle"></div>
+  </div>
   <div id="sheet-body"></div>
 </div>
 
@@ -984,7 +986,7 @@ function selectPlace(id) {
   selectedId = id;
   if (prev && prev !== id) refreshIcon(prev);
   refreshIcon(id);
-  openSidebar();
+  openSidebar('peek');
   setTab('place');
   document.getElementById('details-btn').textContent = 'Hide Details';
   document.getElementById('leaderboard-btn').classList.remove('active');
@@ -1217,7 +1219,7 @@ function renderList() {
 function listItemClick(id) {
   selectedId = id;
   refreshIcon(id);
-  openSidebar();
+  openSidebar('peek');
   setTab('place');
   document.getElementById('details-btn').textContent = 'Hide Details';
   document.getElementById('leaderboard-btn').classList.remove('active');
@@ -1285,11 +1287,15 @@ function renderLeaderboard() {
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 function isMobile() { return window.innerWidth <= 680; }
 
-function openSidebar() {
+function openSidebar(sheetState) {
+  // sheetState: 'peek' (place tap) or 'open' (leaderboard). Default: 'peek'
   sidebarOpen = true;
   if (isMobile()) {
-    document.getElementById('bottom-sheet').classList.add('open');
-    document.getElementById('sheet-backdrop').classList.add('visible');
+    const sheet = document.getElementById('bottom-sheet');
+    sheet.classList.remove('peek', 'open');
+    sheet.classList.add(sheetState || 'peek');
+    // Backdrop only when fully open
+    document.getElementById('sheet-backdrop').classList.toggle('visible', sheetState === 'open');
   } else {
     document.getElementById('sidebar').classList.remove('collapsed');
     setTimeout(() => map.invalidateSize(), 260);
@@ -1300,7 +1306,8 @@ function closeSidebar() {
   document.getElementById('details-btn').textContent = 'Show Details';
   document.getElementById('leaderboard-btn').classList.remove('active');
   if (isMobile()) {
-    document.getElementById('bottom-sheet').classList.remove('open');
+    const sheet = document.getElementById('bottom-sheet');
+    sheet.classList.remove('peek', 'open');
     document.getElementById('sheet-backdrop').classList.remove('visible');
   } else {
     document.getElementById('sidebar').classList.add('collapsed');
@@ -1317,7 +1324,7 @@ function toggleDetails() {
   } else if (sidebarOpen && currentTab === 'place') {
     closeSidebar();
   } else {
-    openSidebar();
+    openSidebar('peek');
     setTab('place');
     document.getElementById('details-btn').textContent = 'Hide Details';
     document.getElementById('leaderboard-btn').classList.remove('active');
@@ -1328,7 +1335,7 @@ function toggleLeaderboard() {
   if (sidebarOpen && currentTab === 'leaderboard') {
     closeSidebar();
   } else {
-    openSidebar();
+    openSidebar('open');
     setTab('leaderboard');
     document.getElementById('leaderboard-btn').classList.add('active');
     document.getElementById('details-btn').textContent = 'Show Details';
@@ -1369,6 +1376,92 @@ function updateStats() {
         Try Again
       </button>`;
   }
+})();
+
+// ─── Mobile Sheet Drag ────────────────────────────────────────────────────────
+(function() {
+  const sheet  = document.getElementById('bottom-sheet');
+  const handle = document.getElementById('sheet-drag-handle');
+  if (!sheet || !handle) return;
+
+  const PEEK_SHOW = 155; // px visible in peek state
+
+  let startY      = 0;
+  let startOffset = 0; // translateY at drag start (px from bottom)
+  let dragging    = false;
+  let lastVY      = 0;
+  let lastT       = 0;
+
+  function currentOffset() {
+    // Returns how many px the sheet is translated (0 = fully open, big = hidden)
+    const h = sheet.offsetHeight;
+    if (sheet.classList.contains('open'))  return 0;
+    if (sheet.classList.contains('peek'))  return h - PEEK_SHOW;
+    return h;
+  }
+
+  function snapTo(state) {
+    sheet.style.transform = '';
+    sheet.style.transition = '';
+    sheet.classList.remove('peek', 'open');
+    if (state === 'open') {
+      sheet.classList.add('open');
+      document.getElementById('sheet-backdrop').classList.add('visible');
+    } else if (state === 'peek') {
+      sheet.classList.add('peek');
+      document.getElementById('sheet-backdrop').classList.remove('visible');
+      sidebarOpen = true;
+    } else {
+      // fully close
+      closeSidebar();
+    }
+  }
+
+  handle.addEventListener('touchstart', e => {
+    startY      = e.touches[0].clientY;
+    startOffset = currentOffset();
+    dragging    = true;
+    lastVY      = 0;
+    lastT       = Date.now();
+    sheet.style.transition = 'none';
+  }, { passive: true });
+
+  window.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    const dy   = e.touches[0].clientY - startY;
+    const newT = Math.max(0, Math.min(sheet.offsetHeight, startOffset + dy));
+    sheet.style.transform = `translateY(${newT}px)`;
+    const now = Date.now();
+    lastVY = (e.touches[0].clientY - (startY + (startOffset - currentOffset()))) / Math.max(1, now - lastT);
+    lastT = now;
+  }, { passive: true });
+
+  window.addEventListener('touchend', e => {
+    if (!dragging) return;
+    dragging = false;
+    sheet.style.transition = '';
+
+    const dy = e.changedTouches[0].clientY - startY;
+    const h  = sheet.offsetHeight;
+    const peekOffset = h - PEEK_SHOW;
+
+    // Use velocity + position to decide snap target
+    const fastUp   = lastVY < -0.4;
+    const fastDown = lastVY >  0.4;
+
+    if (fastUp || dy < -60) {
+      snapTo('open');
+    } else if (fastDown || dy > 80) {
+      if (sheet.classList.contains('open') || startOffset < peekOffset) {
+        snapTo('peek');
+      } else {
+        snapTo('closed');
+      }
+    } else {
+      // Restore previous state (just clear inline style)
+      sheet.style.transform = '';
+    }
+  }, { passive: true });
 })();
 </script>
 </body>
