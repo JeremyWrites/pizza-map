@@ -5,7 +5,7 @@
   "icons": [
     { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
   ],
-  "start_url": "/",
+  "start_url": "/pizza-map/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#e23636"
