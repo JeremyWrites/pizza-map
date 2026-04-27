@@ -511,7 +511,7 @@
       <button class="hdr-btn active" id="btn-map-view"  onclick="setAppView('map')">🗺 Map</button>
       <button class="hdr-btn"        id="btn-list-view" onclick="setAppView('list')">📋 List</button>
     </div>
-    <button class="hdr-btn" id="lb-toggle-btn" onclick="toggleSidebar('leaderboard')">🏆 Leaderboard</button>
+    <button class="hdr-btn" id="lb-toggle-btn" onclick="toggleSidebar(currentTab||'place')">Show Details</button>
   </div>
 </header>
 
@@ -1291,7 +1291,7 @@ function isMobile() { return window.innerWidth <= 680; }
 
 function openSidebar() {
   sidebarOpen = true;
-  document.getElementById('lb-toggle-btn').classList.add('active');
+  document.getElementById('lb-toggle-btn').textContent = 'Hide Details';
   if (isMobile()) {
     document.getElementById('bottom-sheet').classList.add('open');
     document.getElementById('sheet-backdrop').classList.add('visible');
@@ -1302,7 +1302,7 @@ function openSidebar() {
 }
 function closeSidebar() {
   sidebarOpen = false;
-  document.getElementById('lb-toggle-btn').classList.remove('active');
+  document.getElementById('lb-toggle-btn').textContent = 'Show Details';
   if (isMobile()) {
     document.getElementById('bottom-sheet').classList.remove('open');
     document.getElementById('sheet-backdrop').classList.remove('visible');
