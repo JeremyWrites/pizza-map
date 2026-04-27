@@ -4,6 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pizza Quest 🍕</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Pizza Quest" />
+  <meta name="theme-color" content="#e63946" />
+  <link rel="apple-touch-icon" id="apple-touch-icon" href="icon.svg" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -269,7 +275,7 @@
       }
       #sheet-backdrop.visible { display: block; }
 
-      /* The sheet itself — three states: hidden / peek / open */
+      /* Sheet — all positioning done via JS inline transform */
       #bottom-sheet {
         position: fixed;
         bottom: 0; left: 0; right: 0;
@@ -279,40 +285,42 @@
         box-shadow: 0 -4px 30px rgba(0,0,0,0.18);
         z-index: 1300;
         display: flex; flex-direction: column;
-        transform: translateY(100%);
-        transition: transform 0.34s cubic-bezier(0.32,0.72,0,1);
         overflow: hidden;
         will-change: transform;
+        /* Start off-screen; JS sets transform from here */
+        transform: translateY(100%);
+        transition: transform 0.34s cubic-bezier(0.32,0.72,0,1);
       }
-      /* Peek: slides up just enough to show handle + pl-header (~155px) */
-      #bottom-sheet.peek { transform: translateY(calc(100% - 155px)); }
-      /* Open: fully visible */
-      #bottom-sheet.open { transform: translateY(0); }
 
-      /* Drag handle — taller touch target */
+      /* Drag handle */
       .sheet-handle {
-        width: 40px; height: 4px;
+        width: 36px; height: 4px;
         background: var(--border);
         border-radius: 2px;
-        margin: 10px auto 6px;
         flex-shrink: 0;
         cursor: grab;
       }
-      /* Invisible padding area around handle for easier touch */
       .sheet-handle-wrap {
-        padding: 6px 0 2px;
+        padding: 8px 0 4px;
         flex-shrink: 0;
         cursor: grab;
         display: flex; justify-content: center;
+        /* Extend touch target below handle into content */
+        margin-bottom: -4px;
       }
 
-      /* Sheet content — only scrollable when open */
+      /* Compact pl-header on mobile to minimise wasted space */
+      #sheet-body .pl-header { padding: 8px 16px 10px; }
+      #sheet-body .pl-name   { font-size: 1rem; }
+
+      /* Sheet content — scrollable only when fully open */
       #sheet-body {
         flex: 1;
         overflow-y: hidden;
         -webkit-overflow-scrolling: touch;
+        transition: overflow-y 0.1s;
       }
-      #bottom-sheet.open #sheet-body { overflow-y: auto; }
+      #bottom-sheet.sb-open #sheet-body { overflow-y: auto; }
 
       /* On mobile the list view is full screen, no sheet needed */
       #list-view { position: fixed; inset: 54px 0 0 0; z-index: 500; }
@@ -405,6 +413,15 @@
     .star:hover { transform: scale(1.25); }
     .rater-num { font-size: 0.82rem; font-weight: 800; color: var(--text-light); width: 22px; text-align: right; }
     .rater-num.set { color: var(--text); }
+    .rater-clear {
+      width: 16px; height: 16px; border-radius: 50%;
+      background: var(--border); border: none; cursor: pointer;
+      font-size: 0.6rem; color: var(--text-mid); line-height: 1;
+      display: none; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: background 0.12s;
+    }
+    .rater-clear:hover { background: var(--red); color: #fff; }
+    .rater-clear.visible { display: flex; }
 
     .avg-box {
       margin-top: 12px; background: var(--bg); border: 1px solid var(--border);
@@ -1062,11 +1079,13 @@ function renderPlacePanel() {
               <div class="rater-name">${h(name)}</div>
               <div class="star-row" id="sr-${p.id}-${name}">${stars}</div>
               <div class="rater-num ${cur?'set':''}" id="sn-${p.id}-${name}">${cur || '–'}</div>
+              <button class="rater-clear ${cur ? 'visible' : ''}" id="rc-${p.id}-${name}"
+                onclick="clearRating('${p.id}','${name}')" title="Clear rating">✕</button>
             </div>`;
         }).join('')}
         ${avg !== null ? `
           <div class="avg-box">
-            <div class="avg-label">Group Average</div>
+            <div class="avg-label">Family Average</div>
             <div class="avg-num">${avg.toFixed(1)}</div>
           </div>` : ''}
       </div>
@@ -1104,7 +1123,19 @@ function toggleVisited(id) {
 
 function setRating(id, reviewer, score) {
   if (!state.ratings[id]) state.ratings[id] = {};
+  // Tap same star again → clear the rating
+  if (state.ratings[id][reviewer] === score) {
+    clearRating(id, reviewer);
+    return;
+  }
   state.ratings[id][reviewer] = score;
+  saveState();
+  renderPlacePanel();
+  if (currentTab === 'leaderboard') renderLeaderboard();
+  if (appView === 'list') renderList();
+}
+function clearRating(id, reviewer) {
+  if (state.ratings[id]) delete state.ratings[id][reviewer];
   saveState();
   renderPlacePanel();
   if (currentTab === 'leaderboard') renderLeaderboard();
@@ -1288,14 +1319,9 @@ function renderLeaderboard() {
 function isMobile() { return window.innerWidth <= 680; }
 
 function openSidebar(sheetState) {
-  // sheetState: 'peek' (place tap) or 'open' (leaderboard). Default: 'peek'
   sidebarOpen = true;
   if (isMobile()) {
-    const sheet = document.getElementById('bottom-sheet');
-    sheet.classList.remove('peek', 'open');
-    sheet.classList.add(sheetState || 'peek');
-    // Backdrop only when fully open
-    document.getElementById('sheet-backdrop').classList.toggle('visible', sheetState === 'open');
+    if (window._sheetSnap) window._sheetSnap(sheetState || 'peek');
   } else {
     document.getElementById('sidebar').classList.remove('collapsed');
     setTimeout(() => map.invalidateSize(), 260);
@@ -1306,9 +1332,7 @@ function closeSidebar() {
   document.getElementById('details-btn').textContent = 'Show Details';
   document.getElementById('leaderboard-btn').classList.remove('active');
   if (isMobile()) {
-    const sheet = document.getElementById('bottom-sheet');
-    sheet.classList.remove('peek', 'open');
-    document.getElementById('sheet-backdrop').classList.remove('visible');
+    if (window._sheetSnap) window._sheetSnap('closed');
   } else {
     document.getElementById('sidebar').classList.add('collapsed');
     setTimeout(() => map.invalidateSize(), 260);
@@ -1384,84 +1408,125 @@ function updateStats() {
   const handle = document.getElementById('sheet-drag-handle');
   if (!sheet || !handle) return;
 
-  const PEEK_SHOW = 155; // px visible in peek state
+  const PEEK_SHOW = 148; // px visible in peek state
 
-  let startY      = 0;
-  let startOffset = 0; // translateY at drag start (px from bottom)
-  let dragging    = false;
-  let lastVY      = 0;
-  let lastT       = 0;
+  let startY = 0, startTY = 0, dragging = false;
+  let prevY = 0, prevT = 0, vy = 0;
 
-  function currentOffset() {
-    // Returns how many px the sheet is translated (0 = fully open, big = hidden)
-    const h = sheet.offsetHeight;
-    if (sheet.classList.contains('open'))  return 0;
-    if (sheet.classList.contains('peek'))  return h - PEEK_SHOW;
-    return h;
+  // Read the actual current translateY from computed style
+  function getTY() {
+    const m = new DOMMatrix(window.getComputedStyle(sheet).transform);
+    return m.m42; // translateY in px
+  }
+
+  // Animate to a px value then optionally run callback
+  function animTo(targetY, cb) {
+    sheet.style.transition = 'transform 0.34s cubic-bezier(0.32,0.72,0,1)';
+    sheet.style.transform  = `translateY(${targetY}px)`;
+    if (cb) sheet.addEventListener('transitionend', cb, { once: true });
   }
 
   function snapTo(state) {
-    sheet.style.transform = '';
-    sheet.style.transition = '';
-    sheet.classList.remove('peek', 'open');
+    const h = sheet.offsetHeight;
     if (state === 'open') {
-      sheet.classList.add('open');
+      animTo(0);
+      sheet.classList.add('sb-open');
       document.getElementById('sheet-backdrop').classList.add('visible');
+      sidebarOpen = true;
     } else if (state === 'peek') {
-      sheet.classList.add('peek');
+      animTo(h - PEEK_SHOW);
+      sheet.classList.remove('sb-open');
       document.getElementById('sheet-backdrop').classList.remove('visible');
       sidebarOpen = true;
     } else {
-      // fully close
-      closeSidebar();
+      animTo(h, () => { sheet.style.transform = 'translateY(100%)'; sheet.style.transition = ''; });
+      sheet.classList.remove('sb-open');
+      document.getElementById('sheet-backdrop').classList.remove('visible');
+      sidebarOpen = false;
+      document.getElementById('details-btn').textContent = 'Show Details';
+      document.getElementById('leaderboard-btn').classList.remove('active');
     }
   }
 
+  // Expose so openSidebar/closeSidebar can call it
+  window._sheetSnap = snapTo;
+
   handle.addEventListener('touchstart', e => {
-    startY      = e.touches[0].clientY;
-    startOffset = currentOffset();
-    dragging    = true;
-    lastVY      = 0;
-    lastT       = Date.now();
+    startY   = e.touches[0].clientY;
+    startTY  = getTY();
+    dragging = true;
+    prevY    = startY;
+    prevT    = Date.now();
+    vy       = 0;
     sheet.style.transition = 'none';
   }, { passive: true });
 
   window.addEventListener('touchmove', e => {
     if (!dragging) return;
     const dy   = e.touches[0].clientY - startY;
-    const newT = Math.max(0, Math.min(sheet.offsetHeight, startOffset + dy));
-    sheet.style.transform = `translateY(${newT}px)`;
-    const now = Date.now();
-    lastVY = (e.touches[0].clientY - (startY + (startOffset - currentOffset()))) / Math.max(1, now - lastT);
-    lastT = now;
+    const newTY = Math.max(0, Math.min(sheet.offsetHeight, startTY + dy));
+    sheet.style.transform = `translateY(${newTY}px)`;
+    const now = Date.now(), dt = now - prevT;
+    if (dt > 0) vy = (e.touches[0].clientY - prevY) / dt;
+    prevY = e.touches[0].clientY; prevT = now;
   }, { passive: true });
 
   window.addEventListener('touchend', e => {
     if (!dragging) return;
     dragging = false;
-    sheet.style.transition = '';
-
     const dy = e.changedTouches[0].clientY - startY;
     const h  = sheet.offsetHeight;
-    const peekOffset = h - PEEK_SHOW;
+    const peekTY = h - PEEK_SHOW;
+    const curTY  = startTY + dy;
 
-    // Use velocity + position to decide snap target
-    const fastUp   = lastVY < -0.4;
-    const fastDown = lastVY >  0.4;
-
-    if (fastUp || dy < -60) {
+    if (vy < -0.3 || dy < -50) {
       snapTo('open');
-    } else if (fastDown || dy > 80) {
-      if (sheet.classList.contains('open') || startOffset < peekOffset) {
-        snapTo('peek');
-      } else {
-        snapTo('closed');
-      }
+    } else if (vy > 0.3 || dy > 50) {
+      // If we were open, go to peek. If already at peek, close.
+      snapTo(startTY < peekTY - 20 ? 'peek' : 'closed');
     } else {
-      // Restore previous state (just clear inline style)
-      sheet.style.transform = '';
+      // Snap to nearest state
+      const dOpen   = Math.abs(curTY);
+      const dPeek   = Math.abs(curTY - peekTY);
+      const dClosed = Math.abs(curTY - h);
+      snapTo(dOpen <= dPeek && dOpen <= dClosed ? 'open'
+           : dPeek <= dClosed                   ? 'peek' : 'closed');
     }
   }, { passive: true });
+})();
+</script>
+
+<script>
+// Generate pizza emoji PNG for iOS home screen icon
+(function() {
+  try {
+    const size = 180;
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const ctx = c.getContext('2d');
+    // White rounded-rect background
+    const r = 38;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(r, 0); ctx.lineTo(size-r, 0);
+    ctx.quadraticCurveTo(size, 0, size, r);
+    ctx.lineTo(size, size-r);
+    ctx.quadraticCurveTo(size, size, size-r, size);
+    ctx.lineTo(r, size);
+    ctx.quadraticCurveTo(0, size, 0, size-r);
+    ctx.lineTo(0, r);
+    ctx.quadraticCurveTo(0, 0, r, 0);
+    ctx.closePath();
+    ctx.fill();
+    // Pizza emoji
+    ctx.font = '130px Apple Color Emoji, Segoe UI Emoji, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🍕', size/2, size/2 + 6);
+    // Swap the apple-touch-icon to the canvas PNG
+    const link = document.getElementById('apple-touch-icon');
+    if (link) link.href = c.toDataURL('image/png');
+  } catch(e) {}
 })();
 </script>
 </body>
