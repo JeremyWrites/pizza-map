@@ -254,6 +254,74 @@
     }
     #sidebar.collapsed { width: 0; opacity: 0; }
 
+    /* ── MOBILE BOTTOM SHEET ─────────────────────────── */
+    @media (max-width: 680px) {
+      /* Hide desktop sidebar entirely on mobile */
+      #sidebar { display: none !important; }
+
+      /* Bottom sheet backdrop */
+      #sheet-backdrop {
+        display: none;
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,0.25);
+        z-index: 1200;
+        touch-action: none;
+      }
+      #sheet-backdrop.visible { display: block; }
+
+      /* The sheet itself */
+      #bottom-sheet {
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        height: 65vh;
+        background: #fff;
+        border-radius: 18px 18px 0 0;
+        box-shadow: 0 -4px 30px rgba(0,0,0,0.18);
+        z-index: 1300;
+        display: flex; flex-direction: column;
+        transform: translateY(100%);
+        transition: transform 0.32s cubic-bezier(0.32,0.72,0,1);
+        overflow: hidden;
+      }
+      #bottom-sheet.open { transform: translateY(0); }
+
+      /* Drag handle */
+      .sheet-handle {
+        width: 40px; height: 4px;
+        background: var(--border);
+        border-radius: 2px;
+        margin: 10px auto 4px;
+        flex-shrink: 0;
+        cursor: grab;
+      }
+
+      /* Sheet tabs mirror desktop */
+      #sheet-tabs {
+        display: flex;
+        border-bottom: 2px solid var(--border);
+        flex-shrink: 0;
+      }
+      .sheet-tab {
+        flex: 1; padding: 10px 6px;
+        background: none; border: none;
+        border-bottom: 2px solid transparent; margin-bottom: -2px;
+        cursor: pointer; font-size: 0.8rem; font-weight: 700; color: var(--text-light);
+        display: flex; align-items: center; justify-content: center; gap: 5px;
+        transition: color 0.15s, border-color 0.15s;
+      }
+      .sheet-tab.active { color: var(--red); border-bottom-color: var(--red); }
+
+      /* Sheet content area */
+      #sheet-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+      /* On mobile the list view is full screen, no sheet needed */
+      #list-view { position: fixed; inset: 54px 0 0 0; z-index: 500; }
+    }
+
+    @media (min-width: 681px) {
+      #sheet-backdrop, #bottom-sheet { display: none !important; }
+    }
+
     .sb-tabs { display: flex; border-bottom: 2px solid var(--border); flex-shrink: 0; }
     .sb-tab {
       flex: 1; padding: 11px 6px;
@@ -507,6 +575,17 @@
     </div>
   </div>
 </main>
+
+<!-- Mobile bottom sheet -->
+<div id="sheet-backdrop" onclick="closeSidebar()"></div>
+<div id="bottom-sheet">
+  <div class="sheet-handle"></div>
+  <div id="sheet-tabs">
+    <button class="sheet-tab active" id="stab-place"       onclick="setTab('place')">📍 Place Details</button>
+    <button class="sheet-tab"        id="stab-leaderboard" onclick="setTab('leaderboard')">🏆 Rankings</button>
+  </div>
+  <div id="sheet-body"></div>
+</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -904,7 +983,7 @@ function renderPlacePanel() {
   const searchQ = encodeURIComponent(`${p.name} pizza New York`);
   const gmUrl   = `https://www.google.com/maps/search/?api=1&query=${searchQ}`;
 
-  contentEl.innerHTML = `
+  const html = `
     <div class="pl-header">
       <div class="pl-name">${h(p.name)}</div>
       <div class="pl-addr">📍 ${h(p.address || 'Upper East Side, New York')}</div>
@@ -951,6 +1030,9 @@ function renderPlacePanel() {
       </div>
     </div>
   `;
+  contentEl.innerHTML = html;
+  const sheetBody = document.getElementById('sheet-body');
+  if (sheetBody) sheetBody.innerHTML = html;
 }
 
 // ─── Rating Actions ───────────────────────────────────────────────────────────
@@ -1103,17 +1185,21 @@ function renderLeaderboard() {
     .filter(p => p.score !== null)
     .sort((a,b) => b.score - a.score);
 
+  const sheetBody = document.getElementById('sheet-body');
+
   if (!ranked.length) {
-    listEl.innerHTML = `
+    const emptyHtml = `
       <div class="lb-empty">
         <div class="icon">🍕</div>
         <strong>No ratings yet!</strong>
         <span>Mark places as tried and rate them<br>to see the rankings here.</span>
       </div>`;
+    listEl.innerHTML = emptyHtml;
+    if (sheetBody && currentTab === 'leaderboard') sheetBody.innerHTML = emptyHtml;
     return;
   }
 
-  listEl.innerHTML = ranked.map((p, i) => {
+  const lbHtml = ranked.map((p, i) => {
     const r   = state.ratings[p.id] || {};
     const sub = REVIEWERS.filter(n => r[n] != null).map(n => `${n.charAt(0)}: ${r[n]}`).join(' · ');
     return `
@@ -1129,32 +1215,53 @@ function renderLeaderboard() {
         </div>
       </div>`;
   }).join('');
+  listEl.innerHTML = lbHtml;
+  if (sheetBody && currentTab === 'leaderboard') sheetBody.innerHTML = lbHtml;
 }
 
 // ─── Sidebar & Tabs ───────────────────────────────────────────────────────────
+function isMobile() { return window.innerWidth <= 680; }
+
 function openSidebar() {
   sidebarOpen = true;
-  document.getElementById('sidebar').classList.remove('collapsed');
   document.getElementById('lb-toggle-btn').classList.add('active');
-  setTimeout(() => map.invalidateSize(), 260);
+  if (isMobile()) {
+    document.getElementById('bottom-sheet').classList.add('open');
+    document.getElementById('sheet-backdrop').classList.add('visible');
+  } else {
+    document.getElementById('sidebar').classList.remove('collapsed');
+    setTimeout(() => map.invalidateSize(), 260);
+  }
 }
 function closeSidebar() {
   sidebarOpen = false;
-  document.getElementById('sidebar').classList.add('collapsed');
   document.getElementById('lb-toggle-btn').classList.remove('active');
-  setTimeout(() => map.invalidateSize(), 260);
+  if (isMobile()) {
+    document.getElementById('bottom-sheet').classList.remove('open');
+    document.getElementById('sheet-backdrop').classList.remove('visible');
+  } else {
+    document.getElementById('sidebar').classList.add('collapsed');
+    setTimeout(() => map.invalidateSize(), 260);
+  }
 }
 function toggleSidebar(tab) {
-  if (!sidebarOpen)        { openSidebar(); setTab(tab); if (tab==='leaderboard') renderLeaderboard(); }
-  else if (currentTab===tab) closeSidebar();
-  else                     { setTab(tab);  if (tab==='leaderboard') renderLeaderboard(); }
+  if (!sidebarOpen)         { openSidebar(); setTab(tab); if (tab==='leaderboard') renderLeaderboard(); }
+  else if (currentTab===tab)  closeSidebar();
+  else                      { setTab(tab);  if (tab==='leaderboard') renderLeaderboard(); }
 }
 function setTab(tab) {
   currentTab = tab;
+  // Desktop tabs
   document.querySelectorAll('.sb-tab').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.sb-view').forEach(el => el.classList.remove('active'));
-  document.getElementById(`tab-${tab}`).classList.add('active');
-  document.getElementById(`view-${tab}`).classList.add('active');
+  const dtab = document.getElementById(`tab-${tab}`);
+  const dview = document.getElementById(`view-${tab}`);
+  if (dtab)  dtab.classList.add('active');
+  if (dview) dview.classList.add('active');
+  // Mobile sheet tabs
+  document.querySelectorAll('.sheet-tab').forEach(el => el.classList.remove('active'));
+  const stab = document.getElementById(`stab-${tab}`);
+  if (stab) stab.classList.add('active');
   if (tab === 'place')       renderPlacePanel();
   if (tab === 'leaderboard') renderLeaderboard();
 }
