@@ -1534,13 +1534,16 @@ function updateStats() {
     sheet.style.transition = 'none';
   }
 
-  // When PEEKING → entire visible card area is draggable (so the user can
-  //   swipe up to open or swipe down to dismiss from anywhere on the card).
-  // When OPEN   → only the drag-handle at the top initiates a drag; the
-  //   sheet-body scrolls normally.
+  // When PEEKING → entire visible card area is draggable.
+  // When OPEN   → drag-handle OR pl-header (name/address/pill row) initiates
+  //   a drag so the user can swipe down to peek or dismiss. The rest of the
+  //   sheet-body stays scrollable as normal.
   sheet.addEventListener('touchstart', e => {
-    const isOpen = sheet.classList.contains('sb-open');
-    if (isOpen && !handle.contains(e.target)) return; // open: handle only
+    const isOpen   = sheet.classList.contains('sb-open');
+    const plHeader = sheet.querySelector('.pl-header');
+    const inHandle = handle.contains(e.target);
+    const inHeader = plHeader && plHeader.contains(e.target);
+    if (isOpen && !inHandle && !inHeader) return;
     startDrag(e);
   }, { passive: true });
 
