@@ -83,6 +83,22 @@
       white-space: nowrap;
     }
 
+    /* Small tried pill that sits inline with the title on mobile */
+    .mobile-stats-pill {
+      display: none; /* shown via mobile media query */
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.28);
+      border-radius: 20px;
+      padding: 1px 7px;
+      font-size: 0.62rem;
+      font-weight: 700;
+      vertical-align: middle;
+      white-space: nowrap;
+      margin-left: 4px;
+    }
+    /* Mobile-only trophy button */
+    .mobile-trophy-btn { display: none; font-size: 1.1rem; padding: 6px 10px; }
+
     .hdr-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
     .hdr-btn {
@@ -324,6 +340,13 @@
 
       /* On mobile the list view is full screen, no sheet needed */
       #list-view { position: fixed; inset: 54px 0 0 0; z-index: 500; }
+
+      /* Mobile header: hide center badge + text buttons; show pill + trophy */
+      #stats-badge      { display: none; }
+      .mobile-stats-pill { display: inline; }
+      #details-btn      { display: none; }
+      #leaderboard-btn  { display: none; }
+      .mobile-trophy-btn { display: flex; }
     }
 
     @media (min-width: 681px) {
@@ -517,7 +540,7 @@
   <div class="hdr-left">
     <span class="hdr-emoji">🍕</span>
     <div>
-      <div class="hdr-title">Pizza Quest</div>
+      <div class="hdr-title">Pizza Quest <span id="mobile-stats-badge" class="mobile-stats-pill">…</span></div>
       <div class="hdr-sub">
         <button class="radius-btn" id="addr-btn" onclick="openAddrPicker()" title="Change home address">
           <span id="addr-label">176 E. 77th Street</span> ✎
@@ -537,6 +560,7 @@
     </div>
     <button class="hdr-btn" id="details-btn"     onclick="toggleDetails()">Show Details</button>
     <button class="hdr-btn" id="leaderboard-btn" onclick="toggleLeaderboard()">🏆 Leaderboard</button>
+    <button class="hdr-btn mobile-trophy-btn" id="mobile-trophy-btn" onclick="toggleLeaderboard()" title="Leaderboard">🏆</button>
   </div>
 </header>
 
@@ -1110,7 +1134,14 @@ function renderPlacePanel() {
   `;
   contentEl.innerHTML = html;
   const sheetBody = document.getElementById('sheet-body');
-  if (sheetBody) sheetBody.innerHTML = html;
+  if (sheetBody) {
+    sheetBody.innerHTML = html;
+    // Let the browser lay out the new content, then tighten the peek height
+    // so it shows name + address + pill but NOT the "tried" button row.
+    requestAnimationFrame(() => {
+      if (window._updatePeekHeight) window._updatePeekHeight();
+    });
+  }
 }
 
 // ─── Rating Actions ───────────────────────────────────────────────────────────
@@ -1388,7 +1419,10 @@ function setTab(tab) {
 function updateStats() {
   const total = places.length;
   const tried = places.filter(p => state.visited[p.id]).length;
-  document.getElementById('stats-badge').textContent = `${tried} / ${total} tried`;
+  const label = `${tried} / ${total} tried`;
+  document.getElementById('stats-badge').textContent = label;
+  const mob = document.getElementById('mobile-stats-badge');
+  if (mob) mob.textContent = label;
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
@@ -1417,18 +1451,36 @@ function updateStats() {
   const handle = document.getElementById('sheet-drag-handle');
   if (!sheet || !handle) return;
 
-  const PEEK_SHOW = 148; // px visible in peek state
+  // Peek height is dynamic — measured from actual header DOM size after render
+  let PEEK_SHOW = 160;
+
+  // Called by renderPlacePanel after injecting content, so peek stops just
+  // below the pill/meta row and doesn't reveal the "tried" button bar.
+  window._updatePeekHeight = function() {
+    const hw = document.getElementById('sheet-drag-handle');
+    const ph = sheet.querySelector('.pl-header');
+    if (hw && ph) {
+      PEEK_SHOW = hw.offsetHeight + ph.offsetHeight + 6; // 6px breathing room
+      // If sheet is currently in peek state, nudge it to the new height instantly
+      const curTY = getTY();
+      const h = sheet.offsetHeight;
+      const isVisible = curTY < h - 10;
+      const isOpen    = curTY < 10;
+      if (isVisible && !isOpen) {
+        sheet.style.transition = 'none';
+        sheet.style.transform  = `translateY(${h - PEEK_SHOW}px)`;
+      }
+    }
+  };
 
   let startY = 0, startTY = 0, dragging = false;
   let prevY = 0, prevT = 0, vy = 0;
 
-  // Read the actual current translateY from computed style
   function getTY() {
     const m = new DOMMatrix(window.getComputedStyle(sheet).transform);
-    return m.m42; // translateY in px
+    return m.m42;
   }
 
-  // Animate to a px value then optionally run callback
   function animTo(targetY, cb) {
     sheet.style.transition = 'transform 0.34s cubic-bezier(0.32,0.72,0,1)';
     sheet.style.transform  = `translateY(${targetY}px)`;
@@ -1457,10 +1509,9 @@ function updateStats() {
     }
   }
 
-  // Expose so openSidebar/closeSidebar can call it
   window._sheetSnap = snapTo;
 
-  handle.addEventListener('touchstart', e => {
+  function startDrag(e) {
     startY   = e.touches[0].clientY;
     startTY  = getTY();
     dragging = true;
@@ -1468,11 +1519,21 @@ function updateStats() {
     prevT    = Date.now();
     vy       = 0;
     sheet.style.transition = 'none';
+  }
+
+  // When PEEKING → entire visible card area is draggable (so the user can
+  //   swipe up to open or swipe down to dismiss from anywhere on the card).
+  // When OPEN   → only the drag-handle at the top initiates a drag; the
+  //   sheet-body scrolls normally.
+  sheet.addEventListener('touchstart', e => {
+    const isOpen = sheet.classList.contains('sb-open');
+    if (isOpen && !handle.contains(e.target)) return; // open: handle only
+    startDrag(e);
   }, { passive: true });
 
   window.addEventListener('touchmove', e => {
     if (!dragging) return;
-    const dy   = e.touches[0].clientY - startY;
+    const dy    = e.touches[0].clientY - startY;
     const newTY = Math.max(0, Math.min(sheet.offsetHeight, startTY + dy));
     sheet.style.transform = `translateY(${newTY}px)`;
     const now = Date.now(), dt = now - prevT;
@@ -1483,18 +1544,19 @@ function updateStats() {
   window.addEventListener('touchend', e => {
     if (!dragging) return;
     dragging = false;
-    const dy = e.changedTouches[0].clientY - startY;
-    const h  = sheet.offsetHeight;
+    const dy     = e.changedTouches[0].clientY - startY;
+    const h      = sheet.offsetHeight;
     const peekTY = h - PEEK_SHOW;
     const curTY  = startTY + dy;
 
     if (vy < -0.3 || dy < -50) {
+      // Fast or long swipe UP → open
       snapTo('open');
     } else if (vy > 0.3 || dy > 50) {
-      // If we were open, go to peek. If already at peek, close.
+      // Fast or long swipe DOWN → peek if was open, else close
       snapTo(startTY < peekTY - 20 ? 'peek' : 'closed');
     } else {
-      // Snap to nearest state
+      // Slow / short drag → snap to nearest state
       const dOpen   = Math.abs(curTY);
       const dPeek   = Math.abs(curTY - peekTY);
       const dClosed = Math.abs(curTY - h);
