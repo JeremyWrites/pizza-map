@@ -587,6 +587,8 @@
   <div id="sheet-body"></div>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 // ─── Constants & mutable config ───────────────────────────────────────────────
@@ -692,21 +694,47 @@ let lbFilter    = 'avg';
 let appView     = 'map';
 let listSort    = 'distance';
 
-function loadState() {
-  try {
-    const s = localStorage.getItem(STATE_KEY);
-    if (s) {
-      const parsed = JSON.parse(s);
-      state = { visited: parsed.visited || {}, ratings: parsed.ratings || {} };
-    }
-  } catch(_) {}
-}
+// ─── Firebase Setup ───────────────────────────────────────────────────────────
+firebase.initializeApp({
+  apiKey:            "AIzaSyAcl0Spculyf6waw_mv-yCLijnoY4PznL8",
+  authDomain:        "pizza-quest-62b20.firebaseapp.com",
+  projectId:         "pizza-quest-62b20",
+  storageBucket:     "pizza-quest-62b20.firebasestorage.app",
+  messagingSenderId: "908978198794",
+  appId:             "1:908978198794:web:9b95a0c99dbd7ab4c702f3"
+});
+const db       = firebase.firestore();
+const stateDoc = db.collection('state').doc('shared');
+let   _saveTimer = null;
+
 function saveState() {
-  try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch(_) {}
+  // Debounce writes — max one write per 800ms
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => {
+    stateDoc.set(state).catch(console.error);
+  }, 800);
+}
+
+function initFirebase() {
+  // Show a subtle sync indicator in the header
+  const badge = document.getElementById('stats-badge');
+  stateDoc.onSnapshot(snap => {
+    if (snap.exists) {
+      const remote = snap.data();
+      state = { visited: remote.visited || {}, ratings: remote.ratings || {} };
+      // Refresh whatever is currently visible
+      renderMarkers();
+      updateStats();
+      if (sidebarOpen) {
+        if (currentTab === 'place')       renderPlacePanel();
+        if (currentTab === 'leaderboard') renderLeaderboard();
+      }
+      if (appView === 'list') renderList();
+    }
+  }, err => console.warn('Firestore:', err));
 }
 
 // ─── Map Setup ────────────────────────────────────────────────────────────────
-loadState();
 
 const map = L.map('map', { center: CENTER, zoom: 15 });
 
@@ -916,6 +944,9 @@ async function reloadPlaces() {
   } catch(_) {}
   document.getElementById('map-loading').classList.add('hidden');
 }
+
+// Start Firebase listener after first map load
+reloadPlaces().then(() => initFirebase());
 
 // ─── Markers ──────────────────────────────────────────────────────────────────
 function makeIcon(id) {
