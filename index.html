@@ -538,7 +538,7 @@
 
 <header>
   <div class="hdr-left">
-    <span class="hdr-emoji">🍕</span>
+    <span class="hdr-emoji" id="home-btn" onclick="goHome()" title="Back to map" style="cursor:pointer">🍕</span>
     <div>
       <div class="hdr-title">Pizza Quest <span id="mobile-stats-badge" class="mobile-stats-pill">…</span></div>
       <div class="hdr-sub">
@@ -1367,6 +1367,18 @@ function openSidebar(sheetState) {
     setTimeout(() => map.invalidateSize(), 260);
   }
 }
+// Tap pizza emoji → deselect place, close sheet, return to map
+function goHome() {
+  if (!isMobile()) return; // desktop emoji is decorative
+  if (selectedId) {
+    const prev = selectedId;
+    selectedId = null;
+    refreshIcon(prev);
+  }
+  closeSidebar();
+  setAppView('map');
+}
+
 function closeSidebar() {
   sidebarOpen = false;
   document.getElementById('details-btn').textContent = 'Show Details';
