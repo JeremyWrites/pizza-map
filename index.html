@@ -511,7 +511,8 @@
       <button class="hdr-btn active" id="btn-map-view"  onclick="setAppView('map')">🗺 Map</button>
       <button class="hdr-btn"        id="btn-list-view" onclick="setAppView('list')">📋 List</button>
     </div>
-    <button class="hdr-btn" id="lb-toggle-btn" onclick="toggleSidebar(currentTab||'place')">Show Details</button>
+    <button class="hdr-btn" id="details-btn"     onclick="toggleDetails()">Show Details</button>
+    <button class="hdr-btn" id="leaderboard-btn" onclick="toggleLeaderboard()">🏆 Leaderboard</button>
   </div>
 </header>
 
@@ -564,11 +565,6 @@
   </div>
 
   <div id="sidebar" class="collapsed">
-    <div class="sb-tabs">
-      <button class="sb-tab active" id="tab-place"       onclick="setTab('place')">📍 Place Details</button>
-      <button class="sb-tab"        id="tab-leaderboard" onclick="setTab('leaderboard')">🏆 Rankings</button>
-    </div>
-
     <div class="sb-view active" id="view-place">
       <div id="place-empty">
         <div class="icon">🗺️</div>
@@ -594,10 +590,6 @@
 <div id="sheet-backdrop" onclick="closeSidebar()"></div>
 <div id="bottom-sheet">
   <div class="sheet-handle"></div>
-  <div id="sheet-tabs">
-    <button class="sheet-tab active" id="stab-place"       onclick="setTab('place')">📍 Place Details</button>
-    <button class="sheet-tab"        id="stab-leaderboard" onclick="setTab('leaderboard')">🏆 Rankings</button>
-  </div>
   <div id="sheet-body"></div>
 </div>
 
@@ -994,6 +986,8 @@ function selectPlace(id) {
   refreshIcon(id);
   openSidebar();
   setTab('place');
+  document.getElementById('details-btn').textContent = 'Hide Details';
+  document.getElementById('leaderboard-btn').classList.remove('active');
   renderPlacePanel();
 }
 
@@ -1225,6 +1219,8 @@ function listItemClick(id) {
   refreshIcon(id);
   openSidebar();
   setTab('place');
+  document.getElementById('details-btn').textContent = 'Hide Details';
+  document.getElementById('leaderboard-btn').classList.remove('active');
   renderPlacePanel();
 }
 
@@ -1286,12 +1282,11 @@ function renderLeaderboard() {
   if (sheetBody && currentTab === 'leaderboard') sheetBody.innerHTML = lbHtml;
 }
 
-// ─── Sidebar & Tabs ───────────────────────────────────────────────────────────
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
 function isMobile() { return window.innerWidth <= 680; }
 
 function openSidebar() {
   sidebarOpen = true;
-  document.getElementById('lb-toggle-btn').textContent = 'Hide Details';
   if (isMobile()) {
     document.getElementById('bottom-sheet').classList.add('open');
     document.getElementById('sheet-backdrop').classList.add('visible');
@@ -1302,7 +1297,8 @@ function openSidebar() {
 }
 function closeSidebar() {
   sidebarOpen = false;
-  document.getElementById('lb-toggle-btn').textContent = 'Show Details';
+  document.getElementById('details-btn').textContent = 'Show Details';
+  document.getElementById('leaderboard-btn').classList.remove('active');
   if (isMobile()) {
     document.getElementById('bottom-sheet').classList.remove('open');
     document.getElementById('sheet-backdrop').classList.remove('visible');
@@ -1311,24 +1307,39 @@ function closeSidebar() {
     setTimeout(() => map.invalidateSize(), 260);
   }
 }
-function toggleSidebar(tab) {
-  if (!sidebarOpen)         { openSidebar(); setTab(tab); if (tab==='leaderboard') renderLeaderboard(); }
-  else if (currentTab===tab)  closeSidebar();
-  else                      { setTab(tab);  if (tab==='leaderboard') renderLeaderboard(); }
+
+function toggleDetails() {
+  if (sidebarOpen && currentTab === 'leaderboard') {
+    // Switch from leaderboard to place details
+    setTab('place');
+    document.getElementById('details-btn').textContent = 'Hide Details';
+    document.getElementById('leaderboard-btn').classList.remove('active');
+  } else if (sidebarOpen && currentTab === 'place') {
+    closeSidebar();
+  } else {
+    openSidebar();
+    setTab('place');
+    document.getElementById('details-btn').textContent = 'Hide Details';
+    document.getElementById('leaderboard-btn').classList.remove('active');
+  }
 }
+
+function toggleLeaderboard() {
+  if (sidebarOpen && currentTab === 'leaderboard') {
+    closeSidebar();
+  } else {
+    openSidebar();
+    setTab('leaderboard');
+    document.getElementById('leaderboard-btn').classList.add('active');
+    document.getElementById('details-btn').textContent = 'Show Details';
+  }
+}
+
 function setTab(tab) {
   currentTab = tab;
-  // Desktop tabs
-  document.querySelectorAll('.sb-tab').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.sb-view').forEach(el => el.classList.remove('active'));
-  const dtab = document.getElementById(`tab-${tab}`);
   const dview = document.getElementById(`view-${tab}`);
-  if (dtab)  dtab.classList.add('active');
   if (dview) dview.classList.add('active');
-  // Mobile sheet tabs
-  document.querySelectorAll('.sheet-tab').forEach(el => el.classList.remove('active'));
-  const stab = document.getElementById(`stab-${tab}`);
-  if (stab) stab.classList.add('active');
   if (tab === 'place')       renderPlacePanel();
   if (tab === 'leaderboard') renderLeaderboard();
 }
