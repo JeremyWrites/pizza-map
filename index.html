@@ -370,6 +370,13 @@
       font-size: 0.8rem; font-weight: 700; color: #92400e;
     }
     .rating-pill .src { font-weight: 400; opacity: 0.7; font-size: 0.72rem; }
+    .family-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: #e63946; border: 1px solid #c1121f;
+      border-radius: 20px; padding: 3px 11px;
+      font-size: 0.8rem; font-weight: 700; color: #fff;
+    }
+    .family-pill .src { font-weight: 400; opacity: 0.75; font-size: 0.72rem; }
 
     .gmaps-link {
       font-size: 0.76rem; color: #2563eb;
@@ -1047,9 +1054,11 @@ function renderPlacePanel() {
       <div class="pl-name">${h(p.name)}</div>
       <div class="pl-addr">📍 ${h(p.address || 'Upper East Side, New York')}</div>
       <div class="pl-meta">
-        ${gRating
-          ? `<span class="rating-pill">⭐ ${gRating} / 5 <span class="src">· Google</span></span>`
-          : `<a href="${gmUrl}" target="_blank" class="gmaps-link">🗺 Look up on Google Maps</a>`
+        ${visited && avg != null
+          ? `<span class="family-pill">🍕 ${avg.toFixed(1)} / 5 <span class="src">· Family Avg</span></span>`
+          : gRating
+            ? `<span class="rating-pill">⭐ ${gRating} / 5 <span class="src">· Google</span></span>`
+            : `<a href="${gmUrl}" target="_blank" class="gmaps-link">🗺 Look up on Google Maps</a>`
         }
         ${gRating ? `<a href="${gmUrl}" target="_blank" class="gmaps-link">🗺 Google Maps</a>` : ''}
         ${visited ? '<span class="tried-badge">✓ Tried!</span>' : ''}
