@@ -413,6 +413,20 @@
     .avg-label { font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-light); }
     .avg-num { font-size: 2rem; font-weight: 900; color: var(--navy); line-height: 1.1; }
 
+    /* ── NOTES ───────────────────────────────────────── */
+    .pl-notes { padding: 0 20px 20px; }
+    .pl-notes textarea {
+      width: 100%; min-height: 80px;
+      border: 1.5px solid var(--border); border-radius: 8px;
+      padding: 9px 11px; font-size: 0.84rem; font-family: inherit;
+      color: var(--text); background: var(--bg);
+      resize: vertical; outline: none;
+      transition: border-color 0.15s;
+      line-height: 1.5;
+    }
+    .pl-notes textarea:focus { border-color: var(--red); background: #fff; }
+    .pl-notes textarea::placeholder { color: var(--text-light); }
+
     /* ── LEADERBOARD VIEW ────────────────────────────── */
     .lb-filter-strip {
       display: flex; gap: 6px; flex-wrap: wrap;
@@ -684,7 +698,7 @@ const FALLBACK_PLACES = [
 ];
 
 // ─── App State ────────────────────────────────────────────────────────────────
-let state = { visited: {}, ratings: {} };
+let state = { visited: {}, ratings: {}, notes: {} };
 let places    = [];
 let markers   = {};
 let selectedId  = null;
@@ -721,12 +735,13 @@ function initFirebase() {
   stateDoc.onSnapshot(snap => {
     if (snap.exists) {
       const remote = snap.data();
-      state = { visited: remote.visited || {}, ratings: remote.ratings || {} };
+      state = { visited: remote.visited || {}, ratings: remote.ratings || {}, notes: remote.notes || {} };
       // Refresh whatever is currently visible
       renderMarkers();
       updateStats();
       if (sidebarOpen) {
-        if (currentTab === 'place')       renderPlacePanel();
+        const focusedIsNote = document.activeElement?.tagName === 'TEXTAREA';
+        if (currentTab === 'place' && !focusedIsNote) renderPlacePanel();
         if (currentTab === 'leaderboard') renderLeaderboard();
       }
       if (appView === 'list') renderList();
@@ -1060,6 +1075,14 @@ function renderPlacePanel() {
           </div>` : ''}
       </div>
     </div>
+
+    <div class="pl-notes">
+      <div class="section-label" style="margin-bottom:8px">Notes</div>
+      <textarea
+        placeholder="Add notes about this place…"
+        oninput="setNote('${p.id}', this.value)"
+      >${h(state.notes?.[p.id] || '')}</textarea>
+    </div>
   `;
   contentEl.innerHTML = html;
   const sheetBody = document.getElementById('sheet-body');
@@ -1090,6 +1113,19 @@ function setRating(id, reviewer, score) {
   renderPlacePanel();
   if (currentTab === 'leaderboard') renderLeaderboard();
   if (appView === 'list') renderList();
+}
+
+let _noteTimer = null;
+function setNote(id, text) {
+  if (!state.notes) state.notes = {};
+  if (text.trim()) {
+    state.notes[id] = text;
+  } else {
+    delete state.notes[id];
+  }
+  // Debounce note saves — wait until typing stops
+  clearTimeout(_noteTimer);
+  _noteTimer = setTimeout(() => saveState(), 1200);
 }
 
 function previewStars(id, reviewer, score) {
